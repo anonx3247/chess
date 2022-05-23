@@ -183,28 +183,33 @@ func (b Board) GetAvailableSquaresForBishop(sq Square) (squares []Square) {
 
 	// find the minimum distance to a piece along each diagonal
 	for _, move := range moves {
-		_, rl, ud := moveType(move)
+		kind, rl, ud := moveType(move)
 		dest := calcMove(move, sq)
-		if b.squares[dest].symbol != "_" {
-			if rl && ud {
-				newMinRU := move.x // each time we pick a positive coordinate
-				if newMinRU < minRU {
-					minRU = newMinRU
-				}
-			} else if rl && !ud {
-				newMinRD := move.x
-				if newMinRD < minRD {
-					minRD = newMinRD
-				}
-			} else if !rl && ud {
-				newMinLU := move.y
-				if newMinLU < minLU {
-					minLU = newMinLU
-				}
-			} else if !rl && !ud {
-				newMinLD := -move.y
-				if newMinLD < minLD {
-					minLD = newMinLD
+		// this may seem redundant or unneccessary but
+		// since this method is used by the king and queen
+		// we still need to filter out non-diagonal moves
+		if kind == "diagonal" {
+			if b.squares[dest].symbol != "_" {
+				if rl && ud {
+					newMinRU := move.x // each time we pick a positive coordinate
+					if newMinRU < minRU {
+						minRU = newMinRU
+					}
+				} else if rl && !ud {
+					newMinRD := move.x
+					if newMinRD < minRD {
+						minRD = newMinRD
+					}
+				} else if !rl && ud {
+					newMinLU := move.y
+					if newMinLU < minLU {
+						minLU = newMinLU
+					}
+				} else if !rl && !ud {
+					newMinLD := -move.y
+					if newMinLD < minLD {
+						minLD = newMinLD
+					}
 				}
 			}
 		}
