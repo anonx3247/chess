@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"strconv"
 )
 
@@ -12,6 +13,12 @@ const Dead State = false
 
 const boardSize int = 7
 
+const Right Direction = true
+const Left Direction = false
+const Up Direction = true
+const Down Direction = false
+
+type Direction bool
 type Color bool
 type State bool
 
@@ -20,9 +27,7 @@ type Square struct {
 	y int
 }
 
-type Move struct {
-	destination Square
-}
+type Move Square
 
 type ChessPiece struct {
 	color      Color
@@ -35,6 +40,7 @@ type ChessPiece struct {
 type Board struct {
 	squares    map[Square]*ChessPiece
 	nowPlaying Color
+	moves      []string
 }
 
 func (s Square) Name() string {
@@ -47,10 +53,12 @@ func (s Square) Name() string {
 
 type Movable interface {
 	GetLegalMoves(loc Square) []Move
+	GetAvailableSquares() []Square
 }
 
 func IsOutOfBounds(m Move, loc Square) bool {
-	newX, newY := loc.x+m.destination.x, loc.y+m.destination.y
+	dest := calcMove(m, loc)
+	newX, newY := dest.x, dest.y
 
 	if newX < 0 || newX > boardSize || newY < 0 || newY > boardSize {
 		return true
@@ -69,7 +77,7 @@ func (p ChessPiece) GetLegalMoves(loc Square) []Move {
 	return legal
 }
 
-func newGame() (b Board) {
+func newGame(r csv.Reader) (b Board) {
 
 	// Pawn
 	pawn := ChessPiece{}
@@ -80,22 +88,37 @@ func newGame() (b Board) {
 			| |x| |
 			| |p| |
 		*/
-		Move{Square{0, 1}},
+		Move{0, 1},
 		/*
 			|x| | |
 			| |p| |
 		*/
-		Move{Square{-1, 1}},
+		Move{-1, 1},
 		/*
 			| | |x|
 			| |p| |
 		*/
-		Move{Square{1, 1}},
+		Move{1, 1},
+		/*
+			| |p| |
+			| |x| |
+		*/
+		Move{0, -1},
+		/*
+			| |p| |
+			|x| | |
+		*/
+		Move{-1, -1},
+		/*
+			| |p| |
+			| | |x|
+		*/
+		Move{1, -1},
 	}
 
 	// Bishop
 
-	diag := func(n int, RightLeft bool, UpDown bool) Move {
+	diag := func(n int, RightLeft Direction, UpDown Direction) Move {
 		if RightLeft {
 			if UpDown {
 				/*
@@ -103,14 +126,14 @@ func newGame() (b Board) {
 					| |x| |
 					|B| | |
 				*/
-				return Move{Square{n, n}}
+				return Move{n, n}
 			} else {
 				/*
 					|B| | |
 					| |x| |
 					| | |x|
 				*/
-				return Move{Square{n, -n}}
+				return Move{n, -n}
 			}
 		} else {
 			if UpDown {
@@ -119,56 +142,33 @@ func newGame() (b Board) {
 					| |x| |
 					| | |B|
 				*/
-				return Move{Square{-n, n}}
+				return Move{-n, n}
 			} else {
 				/*
 					| | |B|
 					| |x| |
 					|x| | |
 				*/
-				return Move{Square{-n, -n}}
+				return Move{-n, -n}
 			}
 		}
 	}
 
-	right := true
-	left := false
-	up := true
-	down := false
+	rangeDiag := func(rl Direction, ud Direction) []Move {
+		L := make([]Move, 7)
+		for i := 1; i < 8; i++ {
+			L[i-1] = diag(i, rl, ud)
+		}
+		return L
+	}
 
 	bishop := ChessPiece{}
 	bishop.value = 3
 	bishop.symbol = "B"
-	bishop.legalMoves = []Move{
-		diag(1, right, up),
-		diag(2, right, up),
-		diag(3, right, up),
-		diag(4, right, up),
-		diag(5, right, up),
-		diag(6, right, up),
-		diag(7, right, up),
-		diag(1, left, up),
-		diag(2, left, up),
-		diag(3, left, up),
-		diag(4, left, up),
-		diag(5, left, up),
-		diag(6, left, up),
-		diag(7, left, up),
-		diag(1, left, down),
-		diag(2, left, down),
-		diag(3, left, down),
-		diag(4, left, down),
-		diag(5, left, down),
-		diag(6, left, down),
-		diag(7, left, down),
-		diag(1, right, down),
-		diag(2, right, down),
-		diag(3, right, down),
-		diag(4, right, down),
-		diag(5, right, down),
-		diag(6, right, down),
-		diag(7, right, down),
-	}
+	bishop.legalMoves = make([]Move, 0)
+	bishop.legalMoves = append(rangeDiag(Right, Up), rangeDiag(Left, Up)...)
+	bishop.legalMoves = append(bishop.legalMoves, rangeDiag(Left, Down)...)
+	bishop.legalMoves = append(bishop.legalMoves, rangeDiag(Right, Down)...)
 
 	// Knight
 
@@ -181,49 +181,49 @@ func newGame() (b Board) {
 			| | | |
 			| |N| |
 		*/
-		Move{Square{-1, 2}},
+		Move{-1, 2},
 		/*
 			| | |x|
 			| | | |
 			| |N| |
 		*/
-		Move{Square{1, 2}},
+		Move{1, 2},
 		/*
 			| |N| |
 			| | | |
 			| | |x|
 		*/
-		Move{Square{1, -2}},
+		Move{1, -2},
 		/*
 			| |N| |
 			| | | |
 			|x| | |
 		*/
-		Move{Square{-1, -2}},
+		Move{-1, -2},
 		/*
 			|x| | |
 			| | |N|
 			| | | |
 		*/
-		Move{Square{-2, 1}},
+		Move{-2, 1},
 		/*
 			| | | |
 			| | |N|
 			|x| | |
 		*/
-		Move{Square{-2, -1}},
+		Move{-2, -1},
 		/*
 			| | |x|
 			|N| | |
 			| | | |
 		*/
-		Move{Square{2, 1}},
+		Move{2, 1},
 		/*
 			| | | |
 			|N| | |
 			| | |x|
 		*/
-		Move{Square{2, -1}},
+		Move{2, -1},
 	}
 
 	// Rook
@@ -232,7 +232,7 @@ func newGame() (b Board) {
 	rook.value = 5
 	rook.symbol = "R"
 
-	horiz := func(n int, RightLeft bool, UpDown bool) Move {
+	horiz := func(n int, RightLeft Direction, UpDown Direction) Move {
 		if RightLeft {
 			if UpDown {
 				/*
@@ -240,14 +240,14 @@ func newGame() (b Board) {
 					|R|x|x|
 					| | | |
 				*/
-				return Move{Square{n, 0}}
+				return Move{n, 0}
 			} else {
 				/*
 					| | | |
 					|x|x|R|
 					| | | |
 				*/
-				return Move{Square{-n, 0}}
+				return Move{-n, 0}
 			}
 		} else {
 			if UpDown {
@@ -256,48 +256,30 @@ func newGame() (b Board) {
 					| |x| |
 					| |x| |
 				*/
-				return Move{Square{0, -n}}
+				return Move{0, -n}
 			} else {
 				/*
 					| |x| |
 					| |x| |
 					| |R| |
 				*/
-				return Move{Square{0, n}}
+				return Move{0, n}
 			}
 		}
 	}
 
-	rook.legalMoves = []Move{
-		horiz(1, right, up),
-		horiz(2, right, up),
-		horiz(3, right, up),
-		horiz(4, right, up),
-		horiz(5, right, up),
-		horiz(6, right, up),
-		horiz(7, right, up),
-		horiz(1, left, up),
-		horiz(2, left, up),
-		horiz(3, left, up),
-		horiz(4, left, up),
-		horiz(5, left, up),
-		horiz(6, left, up),
-		horiz(7, left, up),
-		horiz(1, left, down),
-		horiz(2, left, down),
-		horiz(3, left, down),
-		horiz(4, left, down),
-		horiz(5, left, down),
-		horiz(6, left, down),
-		horiz(7, left, down),
-		horiz(1, right, down),
-		horiz(2, right, down),
-		horiz(3, right, down),
-		horiz(4, right, down),
-		horiz(5, right, down),
-		horiz(6, right, down),
-		horiz(7, right, down),
+	rangeHoriz := func(rl Direction, ud Direction) []Move {
+		L := make([]Move, 7)
+		for i := 1; i < 8; i++ {
+			L[i-1] = horiz(i, rl, ud)
+		}
+		return L
 	}
+
+	rook.legalMoves = make([]Move, 0)
+	rook.legalMoves = append(rangeHoriz(Right, Up), rangeHoriz(Left, Up)...)
+	rook.legalMoves = append(rook.legalMoves, rangeHoriz(Left, Down)...)
+	rook.legalMoves = append(rook.legalMoves, rangeHoriz(Right, Down)...)
 
 	// Queen
 
@@ -313,43 +295,35 @@ func newGame() (b Board) {
 	king.value = 100 // completely arbitrary
 	king.symbol = "N"
 	king.legalMoves = []Move{
-		diag(1, true, true),
-		diag(1, true, false),
-		diag(1, false, true),
-		diag(1, false, false),
-		horiz(1, true, true),
-		horiz(1, true, false),
-		horiz(1, false, true),
-		horiz(1, false, false),
+		diag(1, Right, Up),
+		diag(1, Right, Down),
+		diag(1, Left, Up),
+		diag(1, Left, Down),
+		horiz(1, Right, Up),
+		horiz(1, Right, Down),
+		horiz(1, Left, Up),
+		horiz(1, Left, Down),
 		// Castling
 		/*
 			| | | | | |... -> | | | | | |...
 			|R| | | |K|... -> | | |N|K| |...
 		*/
-		Move{Square{-2, 0}},
+		Move{-2, 0},
 		/*
 			...| | | | | | -> ...| | | | | |
 			...| |K| | |R| -> ...| | |R|K| |
 		*/
-		Move{Square{2, 0}},
+		Move{2, 0},
 	}
 
-	//
+	// Empty Square
+	empty := ChessPiece{}
+	empty.value = 0
+	empty.symbol = "_"
+	empty.legalMoves = []Move{}
 
-	// Initial Board layout
-	/*
-		|R|N|B|Q|K|B|N|R|
-		|p|p|p|p|p|p|p|p|
-		| | | | | | | | |
-		| | | | | | | | |
-		| | | | | | | | |
-		| | | | | | | | |
-		|p|p|p|p|p|p|p|p|
-		|R|N|B|Q|K|B|N|R|
-	*/
-
-	set := func(name string, col Color, c *ChessPiece) {
-		sq := getSquare(name)
+	// helper function for setting squares
+	set := func(sq Square, col Color, c *ChessPiece) {
 		m := new(ChessPiece)
 		*m = *c
 		m.state = Alive
@@ -357,79 +331,38 @@ func newGame() (b Board) {
 		b.squares[sq] = m
 	}
 
-	set("a1", White, &rook)
-	set("a2", White, &knight)
-	set("a3", White, &bishop)
-	set("a4", White, &queen)
-	set("a5", White, &king)
-	set("a6", White, &bishop)
-	set("a7", White, &knight)
-	set("a8", White, &rook)
-	set("b1", White, &pawn)
-	set("b2", White, &pawn)
-	set("b3", White, &pawn)
-	set("b4", White, &pawn)
-	set("b5", White, &pawn)
-	set("b6", White, &pawn)
-	set("b7", White, &pawn)
-	set("b8", White, &pawn)
-	set("h1", Black, &rook)
-	set("h2", Black, &knight)
-	set("h3", Black, &bishop)
-	set("h4", Black, &queen)
-	set("h5", Black, &king)
-	set("h6", Black, &bishop)
-	set("h7", Black, &knight)
-	set("h8", Black, &rook)
-	set("g1", Black, &pawn)
-	set("g2", Black, &pawn)
-	set("g3", Black, &pawn)
-	set("g4", Black, &pawn)
-	set("g5", Black, &pawn)
-	set("g6", Black, &pawn)
-	set("g7", Black, &pawn)
-	set("g8", Black, &pawn)
+	squares, err := r.ReadAll()
+	check(err)
 
-	empty := ChessPiece{}
-	empty.value = 0
-	empty.symbol = "_"
-	empty.legalMoves = []Move{}
+	piece := map[byte]*ChessPiece{
+		'p': &pawn,
+		'B': &bishop,
+		'N': &knight,
+		'K': &king,
+		'Q': &queen,
+		'R': &rook,
+		'_': &empty,
+	}
 
-	// arbitrarily we choose white, this has no importance
-	set("c1", White, &empty)
-	set("c2", White, &empty)
-	set("c3", White, &empty)
-	set("c4", White, &empty)
-	set("c5", White, &empty)
-	set("c6", White, &empty)
-	set("c7", White, &empty)
-	set("c8", White, &empty)
-	set("d1", White, &empty)
-	set("d2", White, &empty)
-	set("d3", White, &empty)
-	set("d4", White, &empty)
-	set("d5", White, &empty)
-	set("d6", White, &empty)
-	set("d7", White, &empty)
-	set("d8", White, &empty)
-	set("e1", White, &empty)
-	set("e2", White, &empty)
-	set("e3", White, &empty)
-	set("e4", White, &empty)
-	set("e5", White, &empty)
-	set("e6", White, &empty)
-	set("e7", White, &empty)
-	set("e8", White, &empty)
-	set("f1", White, &empty)
-	set("f2", White, &empty)
-	set("f3", White, &empty)
-	set("f4", White, &empty)
-	set("f5", White, &empty)
-	set("f6", White, &empty)
-	set("f7", White, &empty)
-	set("f8", White, &empty)
+	colorer := map[byte]Color{
+		'w': White,
+		'b': Black,
+	}
+
+	for i := 0; i <= boardSize; i++ {
+		for j := 0; j <= boardSize; j++ {
+			// we read from top to bottom, but we insert from bootom to top
+			sq := Square{boardSize - i, boardSize - j}
+			val := squares[i][j]
+			if j < (boardSize+1)/2 {
+				set(sq, colorer[val[0]], piece[val[1]])
+			} else {
+				set(sq, colorer[val[0]], piece[val[1]])
+			}
+		}
+	}
+
 	return
-
 }
 
 func getSquare(name string) Square {
