@@ -3,6 +3,10 @@ package main
 func main() {
 }
 
-func check(e error) {
-	panic(e)
+func check(errors ...error) {
+	for _, err := range errors {
+		if err != nil {
+			panic(err)
+		}
+	}
 }

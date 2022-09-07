@@ -11,7 +11,7 @@ type MoveInstruction struct {
 	dest Square
 }
 
-func calcMove(m Move, start Square) (dest Square) {
+func (m Move) DestFrom(start Square) (dest Square) {
 	dest.x = start.x + m.x
 	dest.y = start.y + m.y
 	return
@@ -76,10 +76,10 @@ func (b Board) MoveToInstruction(move string) (i MoveInstruction, e error) {
 	for _, pieceSquare := range possiblePieces {
 		//p := b.squares[pieceSquare]
 
-		reachableSquares, err := b.GetAvailableSquaresFor(pieceSquare)
+		reachableSquares, err := b.ReachableSquaresFrom(pieceSquare)
 		e = err
 
-		//reachableSquares := p.GetAvailableSquares(pieceSquare)
+		//reachableSquares := p.ReachableSquares(pieceSquare)
 		for _, sq := range reachableSquares {
 			if sq == i.dest {
 				i.init = pieceSquare
@@ -99,38 +99,38 @@ func (b Board) MoveToInstruction(move string) (i MoveInstruction, e error) {
 	return
 }
 
-func (c ChessPiece) GetAvailableSquares(loc Square) []Square {
-	moves := c.GetLegalMoves(loc)
+func (c ChessPiece) ReachableSquares(loc Square) []Square {
+	moves := c.LegalMoves(loc)
 	squares := make([]Square, 0)
 
 	for _, move := range moves {
-		squares = append(squares, calcMove(move, loc))
+		squares = append(squares, move.DestFrom(loc))
 	}
 	return squares
 }
 
-func (b Board) GetAvailableSquaresFor(sq Square) (squares []Square, e error) {
+func (b Board) ReachableSquaresFrom(sq Square) (squares []Square, e error) {
 	piece := b.squares[sq]
 	squares = make([]Square, 0)
 
 	switch piece.symbol {
 	case "p":
-		squares = b.GetAvailableSquaresForPawn(sq)
+		squares = b.ReachableSquaresForPawn(sq)
 		return
 	case "N":
-		squares = b.GetAvailableSquaresForKnight(sq)
+		squares = b.ReachableSquaresForKnight(sq)
 		return
 	case "B":
-		squares = b.GetAvailableSquaresForBishop(sq)
+		squares = b.ReachableSquaresForBishop(sq)
 		return
 	case "R":
-		squares = b.GetAvailableSquaresForRook(sq)
+		squares = b.ReachableSquaresForRook(sq)
 		return
 	case "Q":
-		squares = b.GetAvailableSquaresForQueen(sq)
+		squares = b.ReachableSquaresForQueen(sq)
 		return
 	case "K":
-		squares = b.GetAvailableSquaresForKing(sq)
+		squares = b.ReachableSquaresForKing(sq)
 		return
 	default:
 		e = errors.New(fmt.Sprint("Unknown symbol:", piece.symbol))
@@ -139,13 +139,13 @@ func (b Board) GetAvailableSquaresFor(sq Square) (squares []Square, e error) {
 	}
 }
 
-func (b Board) GetAvailableSquaresForPawn(sq Square) (squares []Square) {
+func (b Board) ReachableSquaresForPawn(sq Square) (squares []Square) {
 	squares = make([]Square, 0)
 	piece := b.squares[sq]
-	moves := piece.GetLegalMoves(sq)
+	moves := piece.LegalMoves(sq)
 	for _, move := range moves {
 		kind, _, ud := moveType(move)
-		dest := calcMove(move, sq)
+		dest := move.DestFrom(sq)
 		if (piece.color == White && ud == Up) || (piece.color == Black && ud == Down) {
 			if kind == "diagonal" {
 				// check if it's diagonals have pieces to kill
@@ -164,16 +164,16 @@ func (b Board) GetAvailableSquaresForPawn(sq Square) (squares []Square) {
 	return
 }
 
-func (b Board) GetAvailableSquaresForKnight(sq Square) []Square {
+func (b Board) ReachableSquaresForKnight(sq Square) []Square {
 	p := b.squares[sq]
 	// knights can go anywhere so theres nothing else to do
-	return p.GetAvailableSquares(sq)
+	return p.ReachableSquares(sq)
 }
 
-func (b Board) GetAvailableSquaresForBishop(sq Square) (squares []Square) {
+func (b Board) ReachableSquaresForBishop(sq Square) (squares []Square) {
 	squares = make([]Square, 0)
 	piece := b.squares[sq]
-	moves := piece.GetLegalMoves(sq)
+	moves := piece.LegalMoves(sq)
 	// these will keep track of the minimum number of
 	// squares along a diagonal before encountering another piece
 	minRU := boardSize
@@ -184,7 +184,7 @@ func (b Board) GetAvailableSquaresForBishop(sq Square) (squares []Square) {
 	// find the minimum distance to a piece along each diagonal
 	for _, move := range moves {
 		kind, rl, ud := moveType(move)
-		dest := calcMove(move, sq)
+		dest := move.DestFrom(sq)
 		// this may seem redundant or unneccessary but
 		// since this method is used by the king and queen
 		// we still need to filter out non-diagonal moves
@@ -217,7 +217,7 @@ func (b Board) GetAvailableSquaresForBishop(sq Square) (squares []Square) {
 
 	for _, move := range moves {
 		_, rl, ud := moveType(move)
-		dest := calcMove(move, sq)
+		dest := move.DestFrom(sq)
 		// we can take different colored pieces, we cannot take same colored pieces
 		if b.squares[dest].symbol != "_" && b.squares[dest].color != piece.color {
 			if rl && ud && move.x < minRU {
@@ -234,10 +234,10 @@ func (b Board) GetAvailableSquaresForBishop(sq Square) (squares []Square) {
 	return
 }
 
-func (b Board) GetAvailableSquaresForRook(sq Square) (squares []Square) {
+func (b Board) ReachableSquaresForRook(sq Square) (squares []Square) {
 	squares = make([]Square, 0)
 	piece := b.squares[sq]
-	moves := piece.GetLegalMoves(sq)
+	moves := piece.LegalMoves(sq)
 	// these will keep track of the minimum number of
 	// squares along an orthogonal before encountering another piece
 	minR := boardSize
@@ -248,7 +248,7 @@ func (b Board) GetAvailableSquaresForRook(sq Square) (squares []Square) {
 	// find the minimum distance to a piece along each orthogonal
 	for _, move := range moves {
 		kind, rl, ud := moveType(move)
-		dest := calcMove(move, sq)
+		dest := move.DestFrom(sq)
 		if b.squares[dest].symbol != "_" {
 			if kind == "vertical" {
 				if ud {
@@ -281,7 +281,7 @@ func (b Board) GetAvailableSquaresForRook(sq Square) (squares []Square) {
 
 	for _, move := range moves {
 		kind, rl, ud := moveType(move)
-		dest := calcMove(move, sq)
+		dest := move.DestFrom(sq)
 		// we can take different colored pieces, we cannot take same colored pieces
 		if b.squares[dest].symbol != "_" && b.squares[dest].color != piece.color {
 			if kind == "horizontal" && rl && move.x < minR {
@@ -298,17 +298,17 @@ func (b Board) GetAvailableSquaresForRook(sq Square) (squares []Square) {
 	return
 }
 
-func (b Board) GetAvailableSquaresForQueen(sq Square) (squares []Square) {
-	bishopSquares := b.GetAvailableSquaresForBishop(sq)
-	rookSquares := b.GetAvailableSquaresForRook(sq)
+func (b Board) ReachableSquaresForQueen(sq Square) (squares []Square) {
+	bishopSquares := b.ReachableSquaresForBishop(sq)
+	rookSquares := b.ReachableSquaresForRook(sq)
 	squares = append(bishopSquares, rookSquares...)
 	return
 }
 
-func (b Board) GetAvailableSquaresForKing(sq Square) (squares []Square) {
+func (b Board) ReachableSquaresForKing(sq Square) (squares []Square) {
 	// the same rules apply to the king and queen, but since `sq` refers
-	// to the king, its set of moves will already be limited when calling `GetAvailableSquaresForQueen`
-	squares = b.GetAvailableSquaresForQueen(sq)
+	// to the king, its set of moves will already be limited when calling `ReachableSquaresForQueen`
+	squares = b.ReachableSquaresForQueen(sq)
 	return
 }
 

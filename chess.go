@@ -67,7 +67,7 @@ func IsOutOfBounds(m Move, loc Square) bool {
 	}
 }
 
-func (p ChessPiece) GetLegalMoves(loc Square) []Move {
+func (p ChessPiece) LegalMoves(loc Square) []Move {
 	legal := make([]Move, 0)
 	for _, move := range p.legalMoves {
 		if !IsOutOfBounds(move, loc) {
@@ -77,10 +77,7 @@ func (p ChessPiece) GetLegalMoves(loc Square) []Move {
 	return legal
 }
 
-func newGame(r csv.Reader) (b Board) {
-
-	// Pawn
-	pawn := ChessPiece{}
+func newPawn() (pawn ChessPiece) {
 	pawn.symbol = "p"
 	pawn.value = 1
 	pawn.legalMoves = []Move{
@@ -115,64 +112,107 @@ func newGame(r csv.Reader) (b Board) {
 		*/
 		Move{1, -1},
 	}
+	return
+}
 
-	// Bishop
-
-	diag := func(n int, RightLeft Direction, UpDown Direction) Move {
-		if RightLeft {
-			if UpDown {
-				/*
-					| | |x|
-					| |x| |
-					|B| | |
-				*/
-				return Move{n, n}
-			} else {
-				/*
-					|B| | |
-					| |x| |
-					| | |x|
-				*/
-				return Move{n, -n}
-			}
+func diagMov(length int, RightLeft Direction, UpDown Direction) Move {
+	if RightLeft {
+		if UpDown {
+			/*
+				| | |x|
+				| |x| |
+				|B| | |
+			*/
+			return Move{length, length}
 		} else {
-			if UpDown {
-				/*
-					|x| | |
-					| |x| |
-					| | |B|
-				*/
-				return Move{-n, n}
-			} else {
-				/*
-					| | |B|
-					| |x| |
-					|x| | |
-				*/
-				return Move{-n, -n}
-			}
+			/*
+				|B| | |
+				| |x| |
+				| | |x|
+			*/
+			return Move{length, -length}
+		}
+	} else {
+		if UpDown {
+			/*
+				|x| | |
+				| |x| |
+				| | |B|
+			*/
+			return Move{-length, length}
+		} else {
+			/*
+				| | |B|
+				| |x| |
+				|x| | |
+			*/
+			return Move{-length, -length}
 		}
 	}
+}
 
-	rangeDiag := func(rl Direction, ud Direction) []Move {
-		L := make([]Move, 7)
-		for i := 1; i < 8; i++ {
-			L[i-1] = diag(i, rl, ud)
-		}
-		return L
+func diagMovRange(rl Direction, ud Direction) []Move {
+	L := make([]Move, 7)
+	for i := 1; i < 8; i++ {
+		L[i-1] = diagMov(i, rl, ud)
 	}
+	return L
+}
 
-	bishop := ChessPiece{}
+func orthoMov(length int, RightLeft Direction, UpDown Direction) Move {
+	if RightLeft {
+		if UpDown {
+			/*
+				| | | |
+				|R|x|x|
+				| | | |
+			*/
+			return Move{length, 0}
+		} else {
+			/*
+				| | | |
+				|x|x|R|
+				| | | |
+			*/
+			return Move{-length, 0}
+		}
+	} else {
+		if UpDown {
+			/*
+				| |R| |
+				| |x| |
+				| |x| |
+			*/
+			return Move{0, -length}
+		} else {
+			/*
+				| |x| |
+				| |x| |
+				| |R| |
+			*/
+			return Move{0, length}
+		}
+	}
+}
+
+func orthoMovRange(rl Direction, ud Direction) []Move {
+	L := make([]Move, 7)
+	for i := 1; i < 8; i++ {
+		L[i-1] = orthoMov(i, rl, ud)
+	}
+	return L
+}
+
+func newBishop() (bishop ChessPiece) {
 	bishop.value = 3
 	bishop.symbol = "B"
-	bishop.legalMoves = make([]Move, 0)
-	bishop.legalMoves = append(rangeDiag(Right, Up), rangeDiag(Left, Up)...)
-	bishop.legalMoves = append(bishop.legalMoves, rangeDiag(Left, Down)...)
-	bishop.legalMoves = append(bishop.legalMoves, rangeDiag(Right, Down)...)
+	bishop.legalMoves = append(diagMovRange(Right, Up), diagMovRange(Left, Up)...)
+	bishop.legalMoves = append(bishop.legalMoves, diagMovRange(Left, Down)...)
+	bishop.legalMoves = append(bishop.legalMoves, diagMovRange(Right, Down)...)
+	return
+}
 
-	// Knight
-
-	knight := ChessPiece{}
+func newKnight() (knight ChessPiece) {
 	knight.value = 3
 	knight.symbol = "N"
 	knight.legalMoves = []Move{
@@ -225,84 +265,38 @@ func newGame(r csv.Reader) (b Board) {
 		*/
 		Move{2, -1},
 	}
+	return
+}
 
-	// Rook
-
-	rook := ChessPiece{}
+func newRook() (rook ChessPiece) {
 	rook.value = 5
 	rook.symbol = "R"
+	rook.legalMoves = append(orthoMovRange(Right, Up), orthoMovRange(Left, Up)...)
+	rook.legalMoves = append(rook.legalMoves, orthoMovRange(Left, Down)...)
+	rook.legalMoves = append(rook.legalMoves, orthoMovRange(Right, Down)...)
+	return
+}
 
-	horiz := func(n int, RightLeft Direction, UpDown Direction) Move {
-		if RightLeft {
-			if UpDown {
-				/*
-					| | | |
-					|R|x|x|
-					| | | |
-				*/
-				return Move{n, 0}
-			} else {
-				/*
-					| | | |
-					|x|x|R|
-					| | | |
-				*/
-				return Move{-n, 0}
-			}
-		} else {
-			if UpDown {
-				/*
-					| |R| |
-					| |x| |
-					| |x| |
-				*/
-				return Move{0, -n}
-			} else {
-				/*
-					| |x| |
-					| |x| |
-					| |R| |
-				*/
-				return Move{0, n}
-			}
-		}
-	}
-
-	rangeHoriz := func(rl Direction, ud Direction) []Move {
-		L := make([]Move, 7)
-		for i := 1; i < 8; i++ {
-			L[i-1] = horiz(i, rl, ud)
-		}
-		return L
-	}
-
-	rook.legalMoves = make([]Move, 0)
-	rook.legalMoves = append(rangeHoriz(Right, Up), rangeHoriz(Left, Up)...)
-	rook.legalMoves = append(rook.legalMoves, rangeHoriz(Left, Down)...)
-	rook.legalMoves = append(rook.legalMoves, rangeHoriz(Right, Down)...)
-
-	// Queen
-
-	queen := ChessPiece{}
+func newQueen() (queen ChessPiece) {
 	queen.value = 9
 	queen.symbol = "Q"
 	// queens can move like bishop or rook
-	queen.legalMoves = append(bishop.legalMoves, rook.legalMoves...)
+	queen.legalMoves = append(newBishop().legalMoves, newRook().legalMoves...)
+	return
+}
 
-	// King
-
-	king := ChessPiece{}
+func newKing() (king ChessPiece) {
 	king.value = 100 // completely arbitrary
 	king.symbol = "N"
 	king.legalMoves = []Move{
-		diag(1, Right, Up),
-		diag(1, Right, Down),
-		diag(1, Left, Up),
-		diag(1, Left, Down),
-		horiz(1, Right, Up),
-		horiz(1, Right, Down),
-		horiz(1, Left, Up),
-		horiz(1, Left, Down),
+		diagMov(1, Right, Up),
+		diagMov(1, Right, Down),
+		diagMov(1, Left, Up),
+		diagMov(1, Left, Down),
+		orthoMov(1, Right, Up),
+		orthoMov(1, Right, Down),
+		orthoMov(1, Left, Up),
+		orthoMov(1, Left, Down),
 		// Castling
 		/*
 			| | | | | |... -> | | | | | |...
@@ -315,12 +309,25 @@ func newGame(r csv.Reader) (b Board) {
 		*/
 		Move{2, 0},
 	}
+	return
+}
 
-	// Empty Square
-	empty := ChessPiece{}
+func newEmpty() (empty ChessPiece) {
 	empty.value = 0
 	empty.symbol = "_"
 	empty.legalMoves = []Move{}
+	return
+}
+
+func newGame(r csv.Reader) (b Board) {
+
+	pawn := newPawn()
+	bishop := newBishop()
+	knight := newKnight()
+	rook := newRook()
+	queen := newQueen()
+	king := newKing()
+	empty := newEmpty()
 
 	// helper function for setting squares
 	set := func(sq Square, col Color, c *ChessPiece) {
@@ -387,4 +394,9 @@ func getSquare(name string) Square {
 	y -= 1
 	return Square{x, y}
 
+}
+
+func (m Move) write() string {
+	sq := Square{m.x, m.y}
+	return sq.Name()
 }
